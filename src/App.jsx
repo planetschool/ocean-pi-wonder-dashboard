@@ -10,6 +10,7 @@ const WONDER_TOPDOWN = "/wonder-topdown.png";
 
 function App() {
   const nmea = useLiveNmea();
+  const liveTrack = useLiveTrack();
   const [route, setRoute] = useState(null);
   const [progress, setProgress] = useState(0.98);
   const [mapMode, setMapMode] = useState("live");
@@ -37,6 +38,7 @@ function App() {
 
             <VoyageMap
               route={route}
+              liveTrack={liveTrack}
               progress={progress}
               setProgress={setProgress}
               mapMode={mapMode}
@@ -81,6 +83,30 @@ function useLiveNmea() {
   return data;
 }
 
+function useLiveTrack() {
+  const [track, setTrack] = useState(null);
+
+  useEffect(() => {
+    async function fetchTrack() {
+      try {
+        const res = await fetch(`${RENDER_API_URL}/api/track`);
+        const json = await res.json();
+        setTrack(json);
+      } catch (err) {
+        console.error("Track fetch failed:", err);
+      }
+    }
+
+    fetchTrack();
+
+    const id = setInterval(fetchTrack, 30000);
+
+    return () => clearInterval(id);
+  }, []);
+
+  return track;
+}
+
 function useRefreshingImage(url, refreshMs) {
   const [version, setVersion] = useState(Date.now());
 
@@ -93,41 +119,155 @@ function useRefreshingImage(url, refreshMs) {
 }
 
 function buildLiveData(nmea) {
-  const windKnots = nmea?.wind_speed ? nmea.wind_speed * 1.94384 : null;
-  const pressureMb = nmea?.atmospheric_pressure ? nmea.atmospheric_pressure * 1000 : null;
+  const windKnots = nmea?.wind_speed
+    ? nmea.wind_speed * 1.94384
+    : null;
+
+  const pressureMb = nmea?.atmospheric_pressure
+    ? nmea.atmospheric_pressure * 1000
+    : null;
+
+  const batteryVoltage =
+    nmea?.battery_0_voltage ?? nmea?.battery_voltage;
+
+  const batteryCurrent =
+    nmea?.battery_0_current ?? nmea?.battery_current;
+
+  const batteryTemp =
+    nmea?.battery_0_temperature ?? nmea?.battery_temperature;
+
+  const batteryPct = batteryVoltage
+    ? Math.min(
+        100,
+        Math.max(
+          0,
+          ((Number(batteryVoltage) - 11.8) / (14.4 - 11.8)) * 100
+        )
+      )
+    : 0;
+
+  const sogKnots = nmea?.speed_over_ground
+    ? nmea.speed_over_ground * 1.94384
+    : null;
 
   return {
     lat: nmea?.gps_latitude ?? null,
     lon: nmea?.gps_longitude ?? null,
+
     latText: formatLat(nmea?.gps_latitude),
     lonText: formatLon(nmea?.gps_longitude),
-    sog: formatNumber(nmea?.speed_over_ground ? nmea.speed_over_ground * 1.94384 : null, 1, "0.0"),
-    cog: formatNumber(nmea?.course_over_ground, 0, "--"),
-    heading: formatNumber(nmea?.heading, 0, "--"),
-    headingOne: formatNumber(nmea?.heading, 1, "--"),
-    variation: formatNumber(nmea?.heading_variation, 1, "--"),
+
+    sog: formatNumber(sogKnots, 1, "0.0"),
+
+    cog: formatNumber(
+      nmea?.course_over_ground,
+      0,
+      "--"
+    ),
+
+    heading: formatNumber(
+      nmea?.heading,
+      0,
+      "--"
+    ),
+
+    headingOne: formatNumber(
+      nmea?.heading,
+      1,
+      "--"
+    ),
+
+    variation: formatNumber(
+      nmea?.heading_variation,
+      1,
+      "--"
+    ),
+
     windKnots: formatNumber(windKnots, 1, "--"),
-    windAngle: formatNumber(nmea?.wind_angle, 0, "--"),
+
+    windAngle: formatNumber(
+      nmea?.wind_angle,
+      0,
+      "--"
+    ),
+
     windDir: degToCompass(nmea?.wind_angle),
-    pressure: formatNumber(pressureMb, 0, "--"),
+
+    pressure: formatNumber(
+      pressureMb,
+      0,
+      "--"
+    ),
+
     water: formatTemp(nmea?.water_temperature),
-    airTemp: formatTemp(nmea?.outside_air_temperature ?? nmea?.air_temperature),
-    humidity: formatNumber(nmea?.relative_humidity, 0, "--"),
-    depth: formatNumber(nmea?.water_depth, 1, "--"),
-    roll: formatNumber(nmea?.roll, 1, "0.0"),
-    pitch: formatNumber(nmea?.pitch, 1, "0.0"),
-    yaw: formatNumber(nmea?.yaw ?? nmea?.heading, 0, "--"),
-    battery: nmea?.battery_voltage ? 87 : 87,
-    voltage: nmea?.battery_voltage ? `${formatNumber(nmea.battery_voltage, 1)} V` : "—",
-    current: nmea?.battery_current ? `${formatNumber(nmea.battery_current, 1)} A` : "—",
+
+    airTemp: formatTemp(
+      nmea?.outside_air_temperature ??
+      nmea?.air_temperature
+    ),
+
+    humidity: formatNumber(
+      nmea?.relative_humidity,
+      0,
+      "--"
+    ),
+
+    depth: formatNumber(
+      nmea?.water_depth,
+      1,
+      "--"
+    ),
+
+    roll: formatNumber(
+      nmea?.roll,
+      1,
+      "0.0"
+    ),
+
+    pitch: formatNumber(
+      nmea?.pitch,
+      1,
+      "0.0"
+    ),
+
+    yaw: formatNumber(
+      nmea?.yaw ?? nmea?.heading,
+      0,
+      "--"
+    ),
+
+    battery: Math.round(batteryPct),
+
+    voltage: batteryVoltage
+      ? `${formatNumber(batteryVoltage, 2)} V`
+      : "—",
+
+    current: batteryCurrent
+      ? `${formatNumber(batteryCurrent, 1)} A`
+      : "—",
+
+    batteryTemp: batteryTemp
+      ? formatTemp(batteryTemp)
+      : "—",
+
     remaining: "—",
-    status: nmea?.last_nmea2000_update_utc ? "LIVE" : "WAITING",
+
+    status: nmea?.last_nmea2000_update_utc
+      ? "LIVE"
+      : "WAITING",
+
     lastUpdate: nmea?.last_nmea2000_update_utc
-      ? new Date(nmea.last_nmea2000_update_utc).toLocaleTimeString()
+      ? new Date(
+          nmea.last_nmea2000_update_utc
+        ).toLocaleTimeString()
       : "Waiting for data",
+
     pgnGps: nmea?.pgn_129025_count ?? "--",
     pgnWind: nmea?.pgn_130306_count ?? "--",
     pgnHeading: nmea?.pgn_127250_count ?? "--",
+
+    currentPlace:
+      nmea?.current_place?.label ?? null,
   };
 }
 
@@ -211,17 +351,35 @@ function CameraPanel({ title, url, refreshMs }) {
   );
 }
 
-function VoyageMap({ route, progress, setProgress, mapMode, setMapMode, live }) {
+function VoyageMap({ route, liveTrack, progress, setProgress, mapMode, setMapMode, live }) {
   const mapRef = useRef(null);
   const mapEl = useRef(null);
   const routeLayersRef = useRef({});
   const boatMarkerRef = useRef(null);
   const lastPointRef = useRef(null);
 
-  const points = useMemo(
-    () => route?.points?.map((p) => [p.lat, p.lon]) || [],
-    [route]
-  );
+  const points = useMemo(() => {
+  const staticPoints =
+    route?.points?.map((p) => [p.lat, p.lon]) || [];
+
+  const liveTrackPoints =
+    liveTrack?.points?.map((p) => [p.lat, p.lon]) || [];
+
+  if (!staticPoints.length) return liveTrackPoints;
+  if (!liveTrackPoints.length) return staticPoints;
+
+  const merged = [...staticPoints];
+
+  for (const point of liveTrackPoints) {
+    const last = merged[merged.length - 1];
+
+    if (!last || distanceMeters(last, point) > 20) {
+      merged.push(point);
+    }
+  }
+
+  return merged;
+}, [route, liveTrack]);
 
   const replayPoint = useMemo(() => {
     if (!points.length) return null;
@@ -382,7 +540,7 @@ function VoyageMap({ route, progress, setProgress, mapMode, setMapMode, live }) 
       <div className="voyage-summary">
         <h3>VOYAGE SUMMARY</h3>
         <SummaryRow label="From" value="Key West, FL" />
-        <SummaryRow label="To" value="Charleston, SC" />
+        <SummaryRow label="To" value={live.currentPlace || "Current area"}/>
         <SummaryRow label="Start" value="May 3, 2026" />
         <SummaryRow label="Distance" value={route ? `${route.distanceNm} NM` : "689.1 NM"} />
         <SummaryRow
