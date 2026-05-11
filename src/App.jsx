@@ -101,7 +101,7 @@ function buildLiveData(nmea) {
     lon: nmea?.gps_longitude ?? null,
     latText: formatLat(nmea?.gps_latitude),
     lonText: formatLon(nmea?.gps_longitude),
-    sog: formatNumber(nmea?.speed_over_ground, 1, "0.0"),
+    sog: formatNumber(nmea?.speed_over_ground ? nmea.speed_over_ground * 1.94384 : null, 1, "0.0"),
     cog: formatNumber(nmea?.course_over_ground, 0, "--"),
     heading: formatNumber(nmea?.heading, 0, "--"),
     headingOne: formatNumber(nmea?.heading, 1, "--"),
