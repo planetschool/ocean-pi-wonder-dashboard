@@ -398,6 +398,10 @@ function VoyageMap({ route, liveTrack, progress, setProgress, mapMode, setMapMod
   const currentPoint = mapMode === "live"
     ? livePoint || replayPoint
     : replayPoint;
+  
+  const liveDistanceNm = useMemo(() => {
+    return calculateRouteDistanceNm(points);
+  }, [points]);
 
   function handleSliderChange(e) {
     setProgress(Number(e.target.value));
@@ -542,7 +546,7 @@ function VoyageMap({ route, liveTrack, progress, setProgress, mapMode, setMapMod
         <SummaryRow label="From" value="Key West, FL" />
         <SummaryRow label="To" value={live.currentPlace || "Current area"}/>
         <SummaryRow label="Start" value="May 3, 2026" />
-        <SummaryRow label="Distance" value={route ? `${route.distanceNm} NM` : "689.1 NM"} />
+        <SummaryRow label="Distance" value={`${liveDistanceNm.toFixed(1)} NM`} />
         <SummaryRow
           label="Map Mode"
           value={
@@ -863,6 +867,18 @@ function formatLon(lon) {
   const deg = Math.floor(abs);
   const min = ((abs - deg) * 60).toFixed(3);
   return `${deg}°${min}' ${Number(lon) >= 0 ? "E" : "W"}`;
+}
+
+function calculateRouteDistanceNm(points) {
+  if (!points || points.length < 2) return 0;
+
+  let meters = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    meters += distanceMeters(points[i - 1], points[i]);
+  }
+
+  return meters / 1852;
 }
 
 function degToCompass(deg) {
