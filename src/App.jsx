@@ -358,28 +358,12 @@ function VoyageMap({ route, liveTrack, progress, setProgress, mapMode, setMapMod
   const boatMarkerRef = useRef(null);
   const lastPointRef = useRef(null);
 
+  // For now, display only the cleaned historic route from public/voyage-route.json.
+  // PiCAN live GPS still controls the boat marker, and Render can still keep logging
+  // new liveTrack points in the background. We are just not drawing liveTrack yet.
   const points = useMemo(() => {
-  const staticPoints =
-    route?.points?.map((p) => [p.lat, p.lon]) || [];
-
-  const liveTrackPoints =
-    liveTrack?.points?.map((p) => [p.lat, p.lon]) || [];
-
-  if (!staticPoints.length) return liveTrackPoints;
-  if (!liveTrackPoints.length) return staticPoints;
-
-  const merged = [...staticPoints];
-
-  for (const point of liveTrackPoints) {
-    const last = merged[merged.length - 1];
-
-    if (!last || distanceMeters(last, point) > 20) {
-      merged.push(point);
-    }
-  }
-
-  return merged;
-}, [route, liveTrack]);
+    return route?.points?.map((p) => [p.lat, p.lon]) || [];
+  }, [route]);
 
   const replayPoint = useMemo(() => {
     if (!points.length) return null;
