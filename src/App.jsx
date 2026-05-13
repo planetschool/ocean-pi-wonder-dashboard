@@ -362,8 +362,35 @@ function VoyageMap({ route, liveTrack, progress, setProgress, mapMode, setMapMod
   // PiCAN live GPS still controls the boat marker, and Render can still keep logging
   // new liveTrack points in the background. We are just not drawing liveTrack yet.
   const points = useMemo(() => {
-    return route?.points?.map((p) => [p.lat, p.lon]) || [];
-  }, [route]);
+  const staticPoints =
+    route?.points?.map((p) => [p.lat, p.lon]) || [];
+
+  const liveTrackPoints =
+    liveTrack?.points?.map((p) => [p.lat, p.lon]) || [];
+
+  if (!staticPoints.length) return liveTrackPoints;
+  if (!liveTrackPoints.length) return staticPoints;
+
+  const merged = [...staticPoints];
+  const lastStaticPoint = staticPoints[staticPoints.length - 1];
+
+  for (const point of liveTrackPoints) {
+    const lastMergedPoint = merged[merged.length - 1];
+
+    // Ignore old/reset live points that are far behind the current GPX endpoint.
+    // This prevents old R2 data from drawing giant straight-line segments.
+    if (distanceMeters(lastStaticPoint, point) > 5000) {
+      continue;
+    }
+
+    // Only append meaningfully new movement.
+    if (!lastMergedPoint || distanceMeters(lastMergedPoint, point) > 20) {
+      merged.push(point);
+    }
+  }
+
+  return merged;
+}, [route, liveTrack]);
 
   const replayPoint = useMemo(() => {
     if (!points.length) return null;
